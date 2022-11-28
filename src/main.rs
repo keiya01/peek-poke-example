@@ -1,7 +1,7 @@
 use std::thread;
 
-use crossbeam_channel::{Receiver, unbounded, Sender};
-use peek_poke::{PeekPoke, poke_into_vec, peek_from_slice, Poke, ensure_red_zone};
+use crossbeam_channel::{unbounded, Receiver, Sender};
+use peek_poke::{ensure_red_zone, peek_from_slice, poke_into_vec, PeekPoke, Poke};
 
 enum Message {
     SetDisplayList(DisplayList),
@@ -51,9 +51,7 @@ struct DisplayListIter<'a> {
 
 impl<'a> DisplayListIter<'a> {
     fn new(data: &'a [u8]) -> Self {
-        DisplayListIter {
-            data,
-        }
+        DisplayListIter { data }
     }
 
     fn next_payload_as_item<'b>(&'b mut self, item: DisplayListItem) -> Option<DisplayListItem> {
@@ -87,7 +85,7 @@ impl Backend {
                     let iter = dl.iter();
                     self.process(iter);
                     self.result_sender.send(()).expect("Could not send result");
-                },
+                }
                 Message::Close => break,
             };
         }
@@ -110,20 +108,33 @@ fn main() {
     let (result_sender, result_receiver) = unbounded();
 
     let backend_thread_name = "backend".to_owned();
-    thread::Builder::new().name(backend_thread_name).spawn(move || {
-        let b = Backend::new(receiver, result_sender);
-        b.run();
-    }).expect("Backend thread could not spawn");
+    thread::Builder::new()
+        .name(backend_thread_name)
+        .spawn(move || {
+            let b = Backend::new(receiver, result_sender);
+            b.run();
+        })
+        .expect("Backend thread could not spawn");
 
     let mut display_list = DisplayList::new();
-    display_list.push_item(&DisplayListItem::Rect(RectItem { min: (100., 100.), max: (500., 500.) }));
-    display_list.push_item(&DisplayListItem::Rect(RectItem { min: (500., 500.), max: (1000., 1000.) }));
+    display_list.push_item(&DisplayListItem::Rect(RectItem {
+        min: (100., 100.),
+        max: (500., 500.),
+    }));
+    display_list.push_item(&DisplayListItem::Rect(RectItem {
+        min: (500., 500.),
+        max: (1000., 1000.),
+    }));
     display_list.end();
 
-    sender.send(Message::SetDisplayList(display_list)).expect("Could not send display_list");
+    sender
+        .send(Message::SetDisplayList(display_list))
+        .expect("Could not send display_list");
     println!("Send display_list");
 
     result_receiver.recv().expect("Could not receive result");
 
-    sender.send(Message::Close).expect("Could not send close message");
+    sender
+        .send(Message::Close)
+        .expect("Could not send close message");
 }
